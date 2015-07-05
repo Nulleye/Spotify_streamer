@@ -42,6 +42,9 @@ import retrofit.RetrofitError;
  */
 public class ToptracksActivityFragment extends MyFragment {
 
+    public static final String PREF_TOPTRACK_RESULT = "toptrack_result";
+    public static final String PREF_TOPTRACK_RESULT_SELECTED = "toptrack_result_selected";
+
     SearchTrack searcher = null;
     TrackAdapter trackAdapter;
 
@@ -117,6 +120,18 @@ public class ToptracksActivityFragment extends MyFragment {
             outState.putString(STATE_SEARCH_RESULT, new Gson().toJson(trackAdapter.getData()));
         } catch(Exception e){}
         outState.putInt(STATE_SEARCH_RESULT_SELECTED, resultList.getSelectedItemPosition());
+    }
+
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        //Save to permanent storeage
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(PREF_TOPTRACK_RESULT, new Gson().toJson(trackAdapter.getData()));
+        editor.putInt(PREF_TOPTRACK_RESULT_SELECTED, resultList.getSelectedItemPosition());
+        editor.commit();
     }
 
 
