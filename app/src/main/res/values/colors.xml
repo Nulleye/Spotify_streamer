@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="semi_transparent">#55000000</color>
+    <color name="actionbar">#FF92B739</color>
+    <color name="actionbar_dark">#FF75932E</color>
+</resources>
