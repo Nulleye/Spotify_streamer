@@ -3,10 +3,11 @@
     package="com.nulleye.udacity.spotifystreamer" >
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/spotidroid"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/AppTheme" >
         <activity
@@ -15,7 +16,6 @@
             android:launchMode="singleTask" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
@@ -24,13 +24,19 @@
             android:label="@string/title_activity_toptracks" >
         </activity>
         <activity
-            android:name=".ImagePopupActivity"
-            android:label="@string/title_activity_image_popup" >
+            android:name=".ImagePopupActivity" >
         </activity>
         <activity
             android:name=".SettingsActivity"
             android:label="@string/title_activity_settings" >
         </activity>
+        <activity
+            android:launchMode="singleTop"
+            android:name=".PlayerActivity"
+            android:label="@string/title_activity_player"
+            android:theme="@style/AppThemeDialog" >
+        </activity>
+        <service android:name=".PlayerService" />
     </application>
 
 </manifest>

@@ -1,13 +1,25 @@
 package com.nulleye.udacity.spotifystreamer;
 
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.res.Resources;
 import android.graphics.Typeface;
+import android.os.IBinder;
 import android.support.v4.app.Fragment;
+import android.support.v7.app.ActionBar;
+import android.support.v7.app.ActionBarActivity;
 import android.util.DisplayMetrics;
+import android.util.Log;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -25,6 +37,11 @@ public abstract class MyFragment extends Fragment implements  ListView.OnItemCli
     public static final String ELEMENT_ID = "element_id";
     public static final String ELEMENT_NAME = "element_name";
     public static final String ELEMENT_ACTION_INTENT_CLASS = "action_intent_class";
+    public static final String ELEMENT_LINK = "element_link";
+    public static final String ELEMENT_EXTRA = "element_extra";
+    public static final String ELEMENT_EXTRA2 = "element_extra2";
+
+    public static final String REQUEST_CODE = "request_code";
 
     public static final String STATE_SEARCH_MESSAGE = "search_message";
     public static final String STATE_SEARCH_RESULT = "search_result";
@@ -41,6 +58,13 @@ public abstract class MyFragment extends Fragment implements  ListView.OnItemCli
     int bestFitImagePixels;
 
     Animation workingAnimation;
+
+    int currentItem = -1;
+
+    MenuItem nowPlayingMenuItem = null;
+    NowPlayingReceiver nowPlayingReceiver;
+
+    public abstract void selectItem(int position);
 
 
     public void setupFragment(View parent, int listviewId) {
@@ -59,6 +83,13 @@ public abstract class MyFragment extends Fragment implements  ListView.OnItemCli
         workingAnimation = AnimationUtils.loadAnimation(getActivity(), R.anim.working);
 
         bestFitImagePixels = Math.round(convertDpToPixel(getResources().getDimension(R.dimen.thumbnail_size), getActivity()));
+    }
+
+
+    protected void forceHideKeyboard(View v) {
+        //Question: why I need to force this?? (not needed only for the first search)
+        InputMethodManager imm = (InputMethodManager) getActivity().getSystemService(Activity.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(v.getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
     }
 
 
@@ -89,6 +120,7 @@ public abstract class MyFragment extends Fragment implements  ListView.OnItemCli
                     strIdImage = R.string.img_no_internet;
                     break;
                 case R.string.message_searching:
+                case R.string.message_loading:
                     strIdImage = R.string.img_searching;
                     animate = true;
                     break;
@@ -164,5 +196,99 @@ public abstract class MyFragment extends Fragment implements  ListView.OnItemCli
         if (largest != null) return largest;
         return null;
     }
+
+
+    protected class NowPlayingReceiver extends BroadcastReceiver {
+
+        public NowPlayingReceiver() {
+            super();
+        }
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Log.v(MyFragment.class.getSimpleName(), "onReceive(" + intent + ")");
+            ActionBar actionbar = ((ActionBarActivity) getActivity()).getSupportActionBar();
+            if ((nowPlayingMenuItem != null) && (actionbar != null) && PlayerService.UPDATE_NOW_PLAYING.equals(intent.getAction())) {
+                PlayerService.UpdateNowPlayingType type =
+                        (PlayerService.UpdateNowPlayingType) intent.getSerializableExtra(PlayerService.UPDATE_NOW_PLAYING_TYPE);
+                nowPlayingMenuItem.setVisible(type == PlayerService.UpdateNowPlayingType.ON);
+            }
+        }
+
+
+        @Override
+        public IBinder peekService(Context myContext, Intent service) {
+            return super.peekService(myContext, service);
+        }
+
+    }
+
+    protected boolean mServiceBound = false;
+    protected PlayerService mBoundService = null;
+
+    protected ServiceConnection mServiceConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            mBoundService = null;
+            mServiceBound = false;
+            updateNowPlayingMenu();
+        }
+
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            Log.d(MyFragment.class.getSimpleName(), "onServiceConnected()");
+            PlayerService.PlayerServiceBinder binder = (PlayerService.PlayerServiceBinder) service;
+            mBoundService = binder.getService();
+            mServiceBound = true;
+            updateNowPlayingMenu();
+        }
+
+    };
+
+
+    protected void bindService() {
+        Intent intent = new Intent(getActivity(),PlayerService.class);
+        intent.setAction(PlayerService.ACTION_DUMMY);
+        getActivity().bindService(intent, mServiceConnection, Context.BIND_AUTO_CREATE);
+    }
+
+
+    protected void unbindService() {
+        getActivity().unbindService(mServiceConnection);
+        mServiceBound = false;
+    }
+
+
+    protected void updateNowPlayingMenu() {
+        if (nowPlayingMenuItem != null) {
+            List<TrackData> tracks = null;
+            if (mBoundService != null) tracks = mBoundService.getTracks();
+            nowPlayingMenuItem.setVisible((tracks != null) && (tracks.size() > 0));
+        }
+    }
+
+
+    protected void switchToPlayer() {
+    //    Intent intent = new Intent(getActivity(), PlayerActivity.class);
+    //    getActivity().startActivity(intent);
+        try {
+            buildSwitchToApplicationIntent(getActivity(), getResources().getBoolean(R.bool.large_layout)).send();
+        } catch (PendingIntent.CanceledException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    public static PendingIntent buildSwitchToApplicationIntent(Context context, boolean twoPane) {
+        Intent[] intentList;
+        Intent mainIntent = new Intent(context, SearchActivity.class);
+        mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Intent playerIntent = new Intent(context, PlayerActivity.class);
+        if (!twoPane) intentList = new Intent[] {mainIntent,  new Intent(context, ToptracksActivity.class), playerIntent};
+        else intentList = new Intent[] {mainIntent, playerIntent};
+        return PendingIntent.getActivities(context, PlayerService.PLAYER_REQUEST_SWITCH, intentList, PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
 
 }

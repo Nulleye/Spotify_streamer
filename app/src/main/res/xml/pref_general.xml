@@ -1,9 +1,18 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
     <ListPreference
-        android:key="country"
+        android:key="com.nulleye.udacity.spotifystreamer.PREF_GENERAL_COUNTRY"
         android:title="@string/pref_country"
         android:negativeButtonText="@null"
         android:positiveButtonText="@null" />
+
+    <CheckBoxPreference
+        android:key="com.nulleye.udacity.spotifystreamer.PREF_GENERAL_PLAYER_NOTIFICATION"
+        android:title="@string/pref_notification"
+        android:negativeButtonText="@null"
+        android:positiveButtonText="@null"
+        android:defaultValue="true"
+        android:summaryOn="@string/pref_description_notification_on"
+        android:summaryOff="@string/pref_description_notification_off" />
 
 </PreferenceScreen>

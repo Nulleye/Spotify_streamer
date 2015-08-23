@@ -3,4 +3,11 @@
     <color name="semi_transparent">#55000000</color>
     <color name="actionbar">#FF92B739</color>
     <color name="actionbar_dark">#FF75932E</color>
+    <color name="actionbar_text">#FFFFFFFF</color>
+
+    <color name="grey">#cccccc</color>
+    <color name="selection_color">#FFCDE68F</color>
+
+    <color name="grey_disabled">#999999</color>
+
 </resources>

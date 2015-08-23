@@ -2,7 +2,9 @@ package com.nulleye.udacity.spotifystreamer;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarActivity;
+import android.view.Menu;
 import android.view.MenuItem;
 
 
@@ -16,13 +18,21 @@ public class ImagePopupActivity extends ActionBarActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_image_popup);
 
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) actionBar.setDisplayHomeAsUpEnabled(true);
 
 //        getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
 
 //        if (savedInstanceState == null)
 //            imagepopup_fragment = (ImagePopupActivityFragment) getSupportFragmentManager().findFragmentById(R.id.imagepopup_fragment);
 
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_image_popup, menu);
+        return true;
     }
 
 

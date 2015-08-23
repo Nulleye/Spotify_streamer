@@ -1,18 +1,20 @@
 package com.nulleye.udacity.spotifystreamer;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
@@ -38,33 +40,51 @@ import kaaes.spotify.webapi.android.models.Image;
 import retrofit.RetrofitError;
 
 
+//TODO ImagePopupActivity in dialog mode (alternative layout with 2 text fields for artist and album+song
+
 /**
  * A placeholder fragment containing a simple view.
  */
-public class SearchActivityFragment extends MyFragment implements TextView.OnEditorActionListener  {
+public class SearchActivityFragment extends MyFragment implements TextView.OnEditorActionListener {
 
     public static final String STATE_SEARCH_TEXT = "search_text";
 
-    public static final String PREF_SEARCH_TEXT = "search_text";
-    public static final String PREF_SEARCH_MESSAGE = "search_message";
-    public static final String PREF_SEARCH_RESULT = "search_result";
-    public static final String PREF_SEARCH_RESULT_SELECTED = "search_result_selected";
-    public static final String PREF_SEARCHING = "searching";
+    public static final String PREF_SEARCH_TEXT = "com.nulleye.udacity.spotifystreamer.PREF_SEARCH_TEXT";
+    public static final String PREF_SEARCH_MESSAGE = "com.nulleye.udacity.spotifystreamer.PREF_SEARCH_MESSAGE";
+    public static final String PREF_SEARCH_RESULT = "com.nulleye.udacity.spotifystreamer.PREF_SEARCH_RESULT";
+    public static final String PREF_SEARCH_RESULT_SELECTED = "com.nulleye.udacity.spotifystreamer.PREF_SEARCH_RESULT_SELECTED";
+    public static final String PREF_SEARCH_SEARCHING = "com.nulleye.udacity.spotifystreamer.PREF_SEARCH_SEARCHING";
+
+    boolean mTwoPane = false;
 
     SearchArtist searcher = null;
     ArtistAdapter artistAdapter;
 
     EditText searchArtist;
 
+    boolean initialLoad = false;
+
+
+    public void setInitialLoad(boolean initialLoad) {
+        this.initialLoad = initialLoad;
+    }
+
+
+    public interface Callback {
+        public void onItemSelected(String artistId, String artistName, String artistLink, boolean initialLoad);
+        public void onImageItemSelected(Serializable itemList, int itemPosition, String intentClass);
+    }
+
 
     public SearchActivityFragment() {
+        setHasOptionsMenu(true);
     }
 
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        View vw = inflater.inflate(R.layout.fragment_search, container, false);
+       View vw = inflater.inflate(R.layout.fragment_search, container, false);
         searchArtist = (EditText) vw.findViewById(R.id.searchArtist);
         searchArtist.setOnEditorActionListener(this);
         setupFragment(vw, R.id.searchResult);
@@ -77,17 +97,17 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
         super.onActivityCreated(savedInstanceState);
 
         List<Artist> artists = null;
-        int selectedItem = -1;
         String text = null;
         boolean searching = false;
         int messageId = 0;
+        currentItem = -1;
         if (savedInstanceState != null) {
             try {
                 //Restore previous search result
                 Type artistCollectionType = new TypeToken<List<Artist>>() {}.getType();
                 artists = new Gson().fromJson(savedInstanceState.getString(STATE_SEARCH_RESULT), artistCollectionType);
             } catch(Exception e) {}
-            selectedItem = savedInstanceState.getInt(STATE_SEARCH_RESULT_SELECTED);
+            currentItem = savedInstanceState.getInt(STATE_SEARCH_RESULT_SELECTED);
             text = savedInstanceState.getString(STATE_SEARCH_TEXT);
             searching = savedInstanceState.getBoolean(STATE_SEARCHING);
             messageId = savedInstanceState.getInt(STATE_SEARCH_MESSAGE);
@@ -99,10 +119,11 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
                 //Restore previous search result
                 Type artistCollectionType = new TypeToken<List<Artist>>() {}.getType();
                 artists = new Gson().fromJson(prefs.getString(PREF_SEARCH_RESULT, null), artistCollectionType);
+                initialLoad = ((artists != null) && (artists.size() > 0) && mTwoPane);
             } catch(Exception e) {}
-            selectedItem = prefs.getInt(PREF_SEARCH_RESULT_SELECTED, -1);
-            searching = prefs.getBoolean(STATE_SEARCHING, false);
-            messageId = prefs.getInt(STATE_SEARCH_MESSAGE, 0);
+            currentItem = prefs.getInt(PREF_SEARCH_RESULT_SELECTED, -1);
+            searching = prefs.getBoolean(PREF_SEARCH_SEARCHING, false);
+            messageId = prefs.getInt(PREF_SEARCH_MESSAGE, 0);
         }
 
         if (text != null) {
@@ -119,7 +140,10 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
         if (searching) searchArtist(text);
 
         //Restore selected item
-        if ((selectedItem < artists.size()) && (selectedItem >= 0)) resultList.setSelection(selectedItem);
+        if ((currentItem < artists.size()) && (currentItem >= 0)) {
+            if (initialLoad) selectItem(currentItem);
+            else resultList.setItemChecked(currentItem,true);
+        }
     }
 
 
@@ -136,13 +160,29 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
         try {
             outState.putString(STATE_SEARCH_RESULT, new Gson().toJson(artistAdapter.getData()));
         } catch(Exception e){}
-        outState.putInt(STATE_SEARCH_RESULT_SELECTED, resultList.getSelectedItemPosition());
+        outState.putInt(STATE_SEARCH_RESULT_SELECTED, currentItem); //resultList.getSelectedItemPosition());
+    }
+
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!mTwoPane) {
+            if (nowPlayingReceiver == null) nowPlayingReceiver = new NowPlayingReceiver();
+            IntentFilter intentFilter = new IntentFilter(PlayerService.UPDATE_NOW_PLAYING);
+            getActivity().registerReceiver(nowPlayingReceiver, intentFilter);
+            bindService();
+        }
     }
 
 
     @Override
     public void onPause() {
         super.onPause();
+        if (!mTwoPane) {
+            if (nowPlayingReceiver != null) getActivity().unregisterReceiver(nowPlayingReceiver);
+            unbindService();
+        }
         //Save to permanent storeage
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
         SharedPreferences.Editor editor = prefs.edit();
@@ -152,11 +192,11 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
         else editor.putInt(PREF_SEARCH_MESSAGE, 0);
         try {
             if ((searcher != null) && (searcher.getStatus() != AsyncTask.Status.FINISHED))
-                editor.putBoolean(PREF_SEARCHING, true);
-            else editor.putBoolean(PREF_SEARCHING, false);
+                editor.putBoolean(PREF_SEARCH_SEARCHING, true);
+            else editor.putBoolean(PREF_SEARCH_SEARCHING, false);
         } catch(Exception e){}
         editor.putString(PREF_SEARCH_RESULT, new Gson().toJson(artistAdapter.getData()));
-        editor.putInt(PREF_SEARCH_RESULT_SELECTED, resultList.getSelectedItemPosition());
+        editor.putInt(PREF_SEARCH_RESULT_SELECTED, currentItem);    //resultList.getSelectedItemPosition());
         editor.commit();
     }
 
@@ -164,13 +204,8 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
     @Override
     public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
         if ((v.getId() == R.id.searchArtist) && (actionId == EditorInfo.IME_ACTION_SEARCH)) {
-
+            forceHideKeyboard(v);
             searchArtist(((EditText) v).getText().toString());
-
-            //Question: why I need to force this?? (not needed only for the first search)
-            InputMethodManager imm = (InputMethodManager) getActivity().getSystemService(Activity.INPUT_METHOD_SERVICE);
-            imm.hideSoftInputFromWindow(v.getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
-
             return true;
         }
         return false;
@@ -189,16 +224,19 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        forceHideKeyboard(view);
+        currentItem = position;
         if (parent.getId() == R.id.searchResult) {
             Artist artist = artistAdapter.getItem(position);
-            if (artist != null) {
-                //Explicit intent with selected element id and name
-                Intent intent = new Intent(getActivity(), ToptracksActivity.class);
-                intent.putExtra(ELEMENT_ID, artist.id);
-                intent.putExtra(ELEMENT_NAME, artist.name);
-                startActivity(intent);
-            }
+            if (artist != null) ((Callback) getActivity()).onItemSelected(artist.id, artist.name,
+                    ItemData.externalUrl(artist.external_urls), initialLoad);
         }
+        if (initialLoad) initialLoad = false;
+    }
+
+
+    public void setTwoPaneMode(boolean twoPaneMode) {
+        mTwoPane = twoPaneMode;
     }
 
 
@@ -235,6 +273,7 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
             try {
                 if (!isCancelled()) {
                     if ((artists != null) && !artists.isEmpty()) {
+                        currentItem = -1;
                         artistAdapter.clear();
                         //Sort by popularity and update adapter
                         Collections.sort(artists, new ArtistComparator(false));
@@ -328,14 +367,54 @@ public class SearchActivityFragment extends MyFragment implements TextView.OnEdi
 
         @Override
         public void onClick(View v) {
-            Intent intent = new Intent(getContext(), ImagePopupActivity.class);
-            intent.putExtra(ELEMENT_LIST, (Serializable) ImagePopupData.buildFromArtistList(data));
-            intent.putExtra(ELEMENT_POSITION, Integer.parseInt((String) v.getTag()));
-            intent.putExtra(ELEMENT_ACTION_INTENT_CLASS, ToptracksActivity.class.getCanonicalName());
-            getContext().startActivity(intent);
+//            Intent intent = new Intent(getContext(), ImagePopupActivity.class);
+//            intent.putExtra(ELEMENT_LIST, (Serializable) ItemData.buildFromArtistList(data));
+//            intent.putExtra(ELEMENT_POSITION, Integer.parseInt((String) v.getTag()));
+//            intent.putExtra(ELEMENT_ACTION_INTENT_CLASS, ToptracksActivity.class.getCanonicalName());
+//            getContext().startActivity(intent);
+            forceHideKeyboard(v);
+            ((SearchActivityFragment.Callback) getActivity()).onImageItemSelected(
+                    (Serializable) ItemData.buildFromArtistList(data),
+                    Integer.parseInt((String) v.getTag()), ToptracksActivity.class.getCanonicalName()
+            );
         }
 
 
     } //ArtistAdapter
+
+
+    @Override
+    public void selectItem(int position) {
+        if ((position > 0) && (resultList != null) && (artistAdapter != null) &&
+                (position < artistAdapter.getCount())) {
+            resultList.performItemClick(
+                    resultList.getAdapter().getView(position, null, null), position, position);
+            //resultList.setSelection(position);
+        }
+    }
+
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+        nowPlayingMenuItem = menu.findItem(R.id.action_now_playing);
+        if (!mTwoPane) updateNowPlayingMenu();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_settings:
+                startActivity(new Intent(getActivity(), SettingsActivity.class));
+                break;
+            case R.id.action_now_playing:
+                switchToPlayer();
+                break;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+        return true;
+    }
+
 
 }

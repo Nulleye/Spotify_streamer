@@ -5,4 +5,6 @@
     <dimen name="thumbnail_size">75dp</dimen>
     <dimen name="thumbnail_margin">10dp</dimen>
     <dimen name="thumbnail_message">36dp</dimen>
+    <dimen name="player_margin">10dp</dimen>
+    <dimen name="player_margin_bottom">10dp</dimen>
 </resources>

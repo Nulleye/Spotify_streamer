@@ -5,6 +5,10 @@
     <string name="pref_header_general">General</string>
 
     <string name="pref_country">Country</string>
-    <string name="pref_description_country">Country to use in search requets</string>
+    <string name="pref_description_country">Country to use in search requests</string>
+
+    <string name="pref_notification">Notification player</string>
+    <string name="pref_description_notification_on">Continue playing after exiting the application and use a screen notification player</string>
+    <string name="pref_description_notification_off">Stop playing when exiting the application and don\'t use a screen notification player</string>
 
 </resources>

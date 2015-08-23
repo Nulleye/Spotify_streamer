@@ -1,19 +1,25 @@
 package com.nulleye.udacity.spotifystreamer;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.v4.view.MenuItemCompat;
+import android.support.v7.widget.ShareActionProvider;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -42,20 +48,69 @@ import retrofit.RetrofitError;
  */
 public class ToptracksActivityFragment extends MyFragment {
 
-    public static final String PREF_TOPTRACK_RESULT = "toptrack_result";
-    public static final String PREF_TOPTRACK_RESULT_SELECTED = "toptrack_result_selected";
+    public static final String PREF_TOPTRACK_RESULT = "com.nulleye.udacity.spotifystreamer.PREF_TOPTRACK_RESULT";
+    public static final String PREF_TOPTRACK_RESULT_SELECTED = "com.nulleye.udacity.spotifystreamer.PREF_TOPTRACK_RESULT_SELECTED";
+    public static final String PREF_TOPTRACK_ARTIST_ID = "com.nulleye.udacity.spotifystreamer.PREF_TOPTRACK_ARTIST_ID";
+    public static final String PREF_TOPTRACK_ARTIST_NAME = "com.nulleye.udacity.spotifystreamer.PREF_TOPTRACK_ARTIST_NAME";
+    public static final String PREF_TOPTRACK_ARTIST_LINK = "com.nulleye.udacity.spotifystreamer.PREF_TOPTRACK_ARTIST_LINK";
+
+
+    public static final String STATE_ARTIST_ID = "artist_id";
+    public static final String STATE_ARTIST_NAME = "artist_name";
+    public static final String STATE_ARTIST_LINK = "artist_link";
+
+    ShareActionProvider mShareActionProvider;
 
     SearchTrack searcher = null;
     TrackAdapter trackAdapter;
 
+    String artistName = null;
+    String artistId = null;
+    String artistLink = null;
+
+    boolean initialLoad = false;
+
+    boolean mTwoPane = false;
+
+    public void setTwoPane(boolean twoPane) {
+        mTwoPane = twoPane;
+    }
+
+    public interface Callback {
+        public void onTrackItemSelected(Serializable itemList, int itemPosition, String extra);
+        public void onTrackImageItemSelected(Serializable itemList, int itemPosition, String intentClass, String extra);
+    }
+
+
+    public static ToptracksActivityFragment newInstance(String artistId, String artistName, String artistLink, boolean initialLoad) {
+        ToptracksActivityFragment f = new ToptracksActivityFragment();
+        Bundle args = new Bundle();
+        args.putString(ELEMENT_ID, artistId);
+        args.putString(ELEMENT_NAME, artistName);
+        args.putString(ELEMENT_LINK, artistLink);
+        args.putBoolean(ELEMENT_EXTRA2, initialLoad); //Tell fragment to load data from storage
+        f.setArguments(args);
+        return f;
+    }
+
 
     public ToptracksActivityFragment() {
+        setHasOptionsMenu(true);
     }
 
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+
+        Bundle arguments = getArguments();
+        if (arguments != null) {
+            artistId = arguments.getString(MyFragment.ELEMENT_ID);
+            artistName = arguments.getString(MyFragment.ELEMENT_NAME);
+            artistLink = arguments.getString(MyFragment.ELEMENT_LINK);
+            initialLoad = arguments.getBoolean(MyFragment.ELEMENT_EXTRA2);
+        }
+
         View vw = inflater.inflate(R.layout.fragment_toptracks, container, false);
         setupFragment(vw, R.id.topTracks);
         return vw;
@@ -66,44 +121,78 @@ public class ToptracksActivityFragment extends MyFragment {
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
 
+        Activity activity = getActivity();
         int messageId = 0;
         List<Track> tracks = null;
-        int selectedItem = -1;
         boolean searching = false;
-        if (savedInstanceState != null) {
+        currentItem = -1;
+        if (artistId != null) {
+          //Data taken from arguments
+        } else if (savedInstanceState != null) {
             try {
                 //Restore previous top tracks list
                 Type trackCollectionType = new TypeToken<List<Track>>() {}.getType();
                 tracks = new Gson().fromJson(savedInstanceState.getString(STATE_SEARCH_RESULT), trackCollectionType);
             } catch (Exception e) {}
-            selectedItem = savedInstanceState.getInt(STATE_SEARCH_RESULT_SELECTED);
+            currentItem = savedInstanceState.getInt(STATE_SEARCH_RESULT_SELECTED);
             //Message id (error, etc)
             messageId = savedInstanceState.getInt(STATE_SEARCH_MESSAGE);
             searching = savedInstanceState.getBoolean(STATE_SEARCHING);
             if (searching) tracks = null;
+            artistId = savedInstanceState.getString(STATE_ARTIST_ID);
+            artistName = savedInstanceState.getString(STATE_ARTIST_NAME);
+            artistLink = savedInstanceState.getString(STATE_ARTIST_LINK);
+        } else if (activity.getIntent().hasExtra(ELEMENT_NAME)) {
+            Intent intent = activity.getIntent();
+            artistId = intent.getStringExtra(ELEMENT_ID);
+            artistName = intent.getStringExtra(ELEMENT_NAME);
+            artistLink = intent.getStringExtra(ELEMENT_LINK);
+        } else {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            try {
+                //Restore previous search result
+                Type trackCollectionType = new TypeToken<List<Track>>() {}.getType();
+                tracks = new Gson().fromJson(prefs.getString(PREF_TOPTRACK_RESULT, null), trackCollectionType);
+            } catch(Exception e) {}
+            currentItem = prefs.getInt(PREF_TOPTRACK_RESULT_SELECTED, 0);
+            artistId = prefs.getString(PREF_TOPTRACK_ARTIST_ID, null);
+            artistName = prefs.getString(PREF_TOPTRACK_ARTIST_NAME, null);
+            artistLink = prefs.getString(PREF_TOPTRACK_ARTIST_LINK, null);
         }
 
-        String id = null;
         if (tracks == null) {
             tracks = new ArrayList<Track>();
-            //Get intent data and search for tracks
-            id = getActivity().getIntent().getStringExtra(ELEMENT_ID);
-            if (id != null) searcher = new SearchTrack();
-            else messageId = R.string.message_error;
+            //Get intent data and search for tracks, from storage or intent
+            if (artistId != null) {
+                if (initialLoad) {
+                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
+                    try {
+                        //Restore previous search result
+                        Type trackCollectionType = new TypeToken<List<Track>>() {}.getType();
+                        tracks = new Gson().fromJson(prefs.getString(PREF_TOPTRACK_RESULT, null), trackCollectionType);
+                        currentItem = prefs.getInt(PREF_TOPTRACK_RESULT_SELECTED, 0);
+                    } catch(Exception e) {}
+                }
+                if ((tracks == null) || (tracks.size() < 1)) searcher = new SearchTrack();
+            }
+            //else messageId = R.string.message_error;
         }
-        trackAdapter = new TrackAdapter(getActivity(), R.layout.artist_top_track, tracks);
+
+        trackAdapter = new TrackAdapter(activity, R.layout.artist_top_track, tracks);
         resultList.setAdapter(trackAdapter);
 
+        if (initialLoad) initialLoad = false;
 
         if (searcher != null) {
             SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
-            searcher.execute(id,
-                    prefs.getString(SettingsActivity.PREF_COUNTRY, Locale.getDefault().getCountry()));
+            searcher.execute(artistId,
+                    prefs.getString(SettingsActivity.PREF_GENERAL_COUNTRY, Locale.getDefault().getCountry()));
         }
         else if (messageId > 0) setMessage(messageId);
 
         //Restore selected item
-        if ((selectedItem < tracks.size()) && (selectedItem >= 0)) resultList.setSelection(selectedItem);
+        if ((currentItem < tracks.size()) && (currentItem >= 0))
+            resultList.setItemChecked(currentItem,true);
     }
 
 
@@ -119,33 +208,57 @@ public class ToptracksActivityFragment extends MyFragment {
         try {
             outState.putString(STATE_SEARCH_RESULT, new Gson().toJson(trackAdapter.getData()));
         } catch(Exception e){}
-        outState.putInt(STATE_SEARCH_RESULT_SELECTED, resultList.getSelectedItemPosition());
+        outState.putInt(STATE_SEARCH_RESULT_SELECTED, currentItem); //resultList.getSelectedItemPosition());
+        outState.putString(STATE_ARTIST_ID, artistId);
+        outState.putString(STATE_ARTIST_NAME, artistName);
+        outState.putString(STATE_ARTIST_LINK, artistLink);
+    }
+
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (nowPlayingReceiver == null) nowPlayingReceiver = new NowPlayingReceiver();
+        IntentFilter intentFilter = new IntentFilter(PlayerService.UPDATE_NOW_PLAYING);
+        getActivity().registerReceiver(nowPlayingReceiver, intentFilter);
+        bindService();
     }
 
 
     @Override
     public void onPause() {
         super.onPause();
+        if (nowPlayingReceiver != null) getActivity().unregisterReceiver(nowPlayingReceiver);
+        unbindService();
         //Save to permanent storeage
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
         SharedPreferences.Editor editor = prefs.edit();
         editor.putString(PREF_TOPTRACK_RESULT, new Gson().toJson(trackAdapter.getData()));
-        editor.putInt(PREF_TOPTRACK_RESULT_SELECTED, resultList.getSelectedItemPosition());
+        editor.putInt(PREF_TOPTRACK_RESULT_SELECTED, currentItem); //resultList.getSelectedItemPosition());
+        editor.putString(PREF_TOPTRACK_ARTIST_ID, artistId);
+        editor.putString(PREF_TOPTRACK_ARTIST_NAME, artistName);
+        editor.putString(PREF_TOPTRACK_ARTIST_LINK, artistLink);
         editor.commit();
     }
 
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        forceHideKeyboard(view);
+        currentItem = position;
         if (parent.getId() == R.id.topTracks) {
             Track track = trackAdapter.getItem(position);
-            if (track != null)
-                Toast.makeText(getActivity(), getString(R.string.not_implemented), Toast.LENGTH_SHORT).show();;
+            if (track != null) {
+                ((Callback) getActivity()).onTrackItemSelected(
+                        (Serializable) TrackData.buildFromTrackList(trackAdapter.getData()),
+                        position, artistName
+                );
+            }
         }
     }
 
 
-    public class SearchTrack extends AsyncTask<String, Void, List<Track>> {
+    protected class SearchTrack extends AsyncTask<String, Void, List<Track>> {
 
         SpotifyApi api = new SpotifyApi();
         int error = 0;
@@ -153,7 +266,7 @@ public class ToptracksActivityFragment extends MyFragment {
 
         @Override
         protected void onPreExecute() {
-            setMessage(R.string.message_searching);
+            setMessage(R.string.message_loading);
         }
 
 
@@ -282,14 +395,73 @@ public class ToptracksActivityFragment extends MyFragment {
 
         @Override
         public void onClick(View v) {
-            Intent intent = new Intent(getContext(), ImagePopupActivity.class);
-            intent.putExtra(ELEMENT_LIST, (Serializable) ImagePopupData.buildFromTrackList(data));
-            intent.putExtra(ELEMENT_POSITION, Integer.parseInt((String) v.getTag()));
-            intent.putExtra(ELEMENT_ACTION_INTENT_CLASS, "[Undefined_Class]");   //Generate exception (not implemented message)
-            getContext().startActivity(intent);
+            forceHideKeyboard(v);
+            ((Callback )getActivity()).onTrackImageItemSelected(
+                    (Serializable) TrackData.buildFromTrackList(data),
+                    Integer.parseInt((String) v.getTag()),
+                    PlayerActivity.class.getCanonicalName(), artistName
+            );
         }
 
 
     } //TrackAdapter
+
+
+    @Override
+    public void selectItem(int position) {
+        if ((position > 0) && (resultList != null) && (trackAdapter != null) &&
+                (position < trackAdapter.getCount())) {
+            resultList.performItemClick(
+                    resultList.getAdapter().getView(position, null, null), position, position);
+            //resultList.setSelection(position);
+        }
+    }
+
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+        if (artistLink != null) {
+            if (mTwoPane) inflater.inflate(R.menu.menu_toptracks_share, menu);
+            MenuItem menuItem = menu.findItem(R.id.action_share);
+            if (menuItem != null) {
+                mShareActionProvider = (ShareActionProvider) MenuItemCompat.getActionProvider(menuItem);
+                if (mShareActionProvider != null)
+                    mShareActionProvider.setShareIntent(createShareArtistIntent());
+            }
+        }
+        nowPlayingMenuItem = menu.findItem(R.id.action_now_playing);
+        updateNowPlayingMenu();
+    }
+
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_settings:
+                startActivity(new Intent(getActivity(), SettingsActivity.class));
+                break;
+            case R.id.action_now_playing:
+                switchToPlayer();
+                break;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+        return true;
+    }
+
+
+    protected Intent createShareArtistIntent() {
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+        shareIntent.setType("text/plain");
+//        try {
+            shareIntent.putExtra(Intent.EXTRA_TEXT, artistLink); // + "#" + URLEncoder.encode(artistName, "utf-8"));
+//        } catch (UnsupportedEncodingException e) {
+//            e.printStackTrace();
+//        }
+        return shareIntent;
+    }
+
 
 }

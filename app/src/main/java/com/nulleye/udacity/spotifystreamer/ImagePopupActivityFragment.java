@@ -2,14 +2,20 @@ package com.nulleye.udacity.spotifystreamer;
 
 //import android.graphics.Matrix;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
+import android.support.v4.view.MenuItemCompat;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarActivity;
+import android.support.v7.widget.ShareActionProvider;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -32,16 +38,29 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
     public static final String STATE_LIST = "list";
     public static final String STATE_LIST_POSITION = "list_position";
     public static final String STATE_ACTION_INTENT_CLASS = "action_intent_class";
+    public static final String STATE_EXTRA = "extra";
+    public static final String STATE_EXTRA2 = "extra2";
+    public static final String STATE_REQUEST_CODE = "request_code";
 
 //    private ImageView image;
 //    private ScaleGestureDetector scaleGestureDetector;
 
+    ShareActionProvider mShareActionProvider = null;
+
     ExtendedViewPager viewPager;
     TouchImageAdapter imageAdapter;
-    List<ImagePopupData> data;
-    String actionIntentClass;
+
+    List<ItemData> data = null;
+    int position = -1;
+    String actionIntentClass = null;
+    String extra = null;
+    boolean extra2 = false;
+
+    //Working mode
+    int requestCode = -1;
 
     public ImagePopupActivityFragment() {
+        setHasOptionsMenu(true);
     }
 
 
@@ -49,25 +68,56 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View vw = inflater.inflate(R.layout.fragment_image_popup, container, false);
+        viewPager = (ExtendedViewPager) vw.findViewById(R.id.imageview_pager);
 
-        data  = null;
-        int position = 0;
+        //Currently not used, imagepopup in right pane was dismissed
+        Bundle arguments = getArguments();
+        if (arguments != null) {
+            try {
+                data = (List<ItemData>) arguments.getSerializable(MyFragment.ELEMENT_LIST);
+            } catch (Exception e) {}
+            position = arguments.getInt(MyFragment.ELEMENT_POSITION);
+            actionIntentClass = arguments.getString(MyFragment.ELEMENT_ACTION_INTENT_CLASS);
+            extra = arguments.getString(MyFragment.ELEMENT_EXTRA);
+        }
+
+        return vw;
+    }
+
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+
         if (savedInstanceState != null) {
             try {
-                data = (List<ImagePopupData>) savedInstanceState.getSerializable(STATE_LIST);
+                data = (List<ItemData>) savedInstanceState.getSerializable(STATE_LIST);
             } catch (Exception e) {}
             position = savedInstanceState.getInt(STATE_LIST_POSITION);
             actionIntentClass = savedInstanceState.getString(STATE_ACTION_INTENT_CLASS);
+            extra = savedInstanceState.getString(STATE_EXTRA);
+            extra2 = savedInstanceState.getBoolean(STATE_EXTRA2);
+            requestCode = savedInstanceState.getInt(STATE_REQUEST_CODE);
         } else {
-            try {
-                data = (List<ImagePopupData>) getActivity().getIntent().getSerializableExtra(MyFragment.ELEMENT_LIST);
-            } catch (Exception e) {}
-            position = getActivity().getIntent().getIntExtra(MyFragment.ELEMENT_POSITION, 0);
-            actionIntentClass = getActivity().getIntent().getStringExtra(MyFragment.ELEMENT_ACTION_INTENT_CLASS);
+            Intent intent = getActivity().getIntent();
+            if (intent != null) {
+                if (data == null)
+                    try {
+                        data = (List<ItemData>) intent.getSerializableExtra(MyFragment.ELEMENT_LIST);
+                    } catch (Exception e) {
+                    }
+                if (position < 0)
+                    position = intent.getIntExtra(MyFragment.ELEMENT_POSITION, 0);
+                if (actionIntentClass == null)
+                    actionIntentClass = intent.getStringExtra(MyFragment.ELEMENT_ACTION_INTENT_CLASS);
+                if (extra == null)
+                    extra = intent.getStringExtra(MyFragment.ELEMENT_EXTRA);
+                extra2 = intent.getBooleanExtra(MyFragment.ELEMENT_EXTRA2, false);
+                requestCode = intent.getIntExtra(MyFragment.REQUEST_CODE, -1);
+            }
         }
         imageAdapter = new TouchImageAdapter(data);
 
-        viewPager = (ExtendedViewPager) vw.findViewById(R.id.imageview_pager);
         viewPager.setAdapter(imageAdapter);
         viewPager.addOnPageChangeListener(new ViewPager.OnPageChangeListener() {
             @Override
@@ -77,6 +127,8 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
             @Override
             public void onPageSelected(int position) {
                 updateTitle(position);
+                if (mShareActionProvider != null)
+                    mShareActionProvider.setShareIntent(createShareItemIntent(data.get(position)));
             }
 
             @Override
@@ -84,19 +136,20 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
             }
         });
         viewPager.setCurrentItem(position);
-        updateTitle(position);  //Force title update as the previous setCurrentItem seems not to call onPageSelected
+        if (position == 0) updateTitle(position);  //Force title update as the previous setCurrentItem seems not to call onPageSelected
 
 //        scaleGestureDetector = new ScaleGestureDetector(getActivity(), new ImageScaleGestureListener());
 
-        return vw;
     }
 
 
     public void updateTitle(int position) {
-        ImagePopupData imageData = data.get(position);
+        ItemData imageData = data.get(position);
         ActionBar actionBar = ((ActionBarActivity) getActivity()).getSupportActionBar();
-        actionBar.setTitle(imageData.title);
-        actionBar.setSubtitle(imageData.subtitle);
+        if (actionBar != null) {
+            actionBar.setTitle(imageData.title);
+            actionBar.setSubtitle(imageData.subtitle);
+        }
     }
 
 
@@ -106,6 +159,9 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
         outState.putSerializable(STATE_LIST, (Serializable) data);
         outState.putInt(STATE_LIST_POSITION, viewPager.getCurrentItem());
         outState.putString(STATE_ACTION_INTENT_CLASS, actionIntentClass);
+        outState.putString(STATE_EXTRA, extra);
+        outState.putBoolean(STATE_EXTRA2, extra2);
+        outState.putInt(STATE_REQUEST_CODE, requestCode);
     }
 
 
@@ -141,11 +197,11 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
 
     class TouchImageAdapter extends PagerAdapter {
 
-        List<ImagePopupData> data;
+        List<ItemData> data;
         List<TouchImageView> images;
 
 
-        public TouchImageAdapter(List<ImagePopupData> data) {
+        public TouchImageAdapter(List<ItemData> data) {
             this.data = data;
             images = new ArrayList<TouchImageView>(data.size());
         }
@@ -158,23 +214,35 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
 
 
         @Override
-        public View instantiateItem(ViewGroup container, int position) {
+        public View instantiateItem(ViewGroup container, final int position) {
             if (images.size() <= position) for(int i=images.size();i<=position;i++) images.add(null);
             TouchImageView img = images.get(position);
             if (img == null) {
                 img = new TouchImageView(container.getContext());
-                final ImagePopupData imageData = data.get(position);
+                final ItemData imageData = data.get(position);
                 img.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
                         if (actionIntentClass != null) {
+                            Activity activity = getActivity();
                             try {
                                 Class clazz = Class.forName(actionIntentClass);
-                                //Explicit intent with selected element id and name
-                                Intent intent = new Intent(getActivity(), clazz);
-                                intent.putExtra(MyFragment.ELEMENT_ID, imageData.id);
-                                intent.putExtra(MyFragment.ELEMENT_NAME, imageData.title);
-                                startActivity(intent);
+                                Intent intent = (requestCode > -1)? new Intent() : new Intent(activity, clazz);
+                                intent.putExtra(MyFragment.ELEMENT_POSITION, position);
+                                if (extra != null) { //Track mode
+                                    //Explicit intent with data and currrent position
+                                    intent.putExtra(MyFragment.ELEMENT_EXTRA, extra);
+                                    intent.putExtra(MyFragment.ELEMENT_LIST, (Serializable) data);
+                                } else { //Artist mode
+                                    //Explicit intent with selected element id and name
+                                    intent.putExtra(MyFragment.ELEMENT_EXTRA2, extra2);
+                                    intent.putExtra(MyFragment.ELEMENT_ID, imageData.id);
+                                    intent.putExtra(MyFragment.ELEMENT_NAME, imageData.title);
+                                }
+                                if (requestCode > -1) {
+                                    activity.setResult(requestCode, intent);
+                                    activity.finish();
+                                } else startActivity(intent);
                             } catch(Exception e) {
                                 //Class not found!? -> show not implemented message
                                 Toast.makeText(getActivity(), getString(R.string.not_implemented), Toast.LENGTH_SHORT).show();;
@@ -203,5 +271,23 @@ public class ImagePopupActivityFragment extends Fragment implements View.OnClick
         }
 
     } //TouchImageAdapter
+
+
+    @Override
+    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        super.onCreateOptionsMenu(menu, inflater);
+        MenuItem menuItem = menu.findItem(R.id.action_share);
+        if (menuItem != null) mShareActionProvider = (ShareActionProvider) MenuItemCompat.getActionProvider(menuItem);
+    }
+
+
+    protected Intent createShareItemIntent(ItemData item) {
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, item.externalUrl);
+        return shareIntent;
+    }
+
 
 }

@@ -11,13 +11,42 @@
     <string name="message_error">Unexpected error!</string>
     <string name="message_no_internet">No internet connection!</string>
     <string name="message_searching">Searching...</string>
+    <string name="message_loading">Loading...</string>
 
     <string name="search_artist">Search artist</string>
 
-    <string name="img_searching"></string>
-    <string name="img_not_found"></string>
-    <string name="img_no_internet"></string>
-    <string name="img_error"></string>
-    <string name="title_activity_image_popup">ImagePopupActivity</string>
+    <string name="img_searching" translatable="false"></string>
+    <string name="img_not_found" translatable="false"></string>
+    <string name="img_no_internet" translatable="false"></string>
+    <string name="img_error" translatable="false"></string>
+
+
+    <string name="title_activity_player">Player</string>
+
+    <string name="previous_song">Previous</string>
+    <string name="play_song">Play</string>
+    <string name="pause_song">Pause</string>
+    <string name="next_song">Next</string>
+    <string name="continuous_play">Continuous play</string>
+
+    <string name="img_previous" translatable="false"></string>
+    <string name="img_play" translatable="false"></string>
+    <string name="img_pause" translatable="false"></string>
+    <string name="img_next" translatable="false"></string>
+    <string name="img_continuous" translatable="false"></string>
+    <string name="img_share" translatable="false"></string>
+
+    <string name="play_current_time">Current time</string>
+    <string name="play_total_time">Total time</string>
+    <string name="play_preview_text">previewing %s</string>
+    <string name="play_error_text">Error</string>
+    <string name="play_buffering_text">buffering %s\%</string>
+
+    <string name="action_share_artist">Share artist</string>
+    <string name="action_share_song">Share song</string>
+    <string name="action_share">Share</string>
+    <string name="action_now_playing">Now playing</string>
+
+    <string name="notification_playing">Playing %s</string>
 
 </resources>

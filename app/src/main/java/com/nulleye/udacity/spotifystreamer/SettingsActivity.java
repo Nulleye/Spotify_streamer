@@ -11,6 +11,7 @@ import android.preference.PreferenceActivity;
 import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.TreeMap;
@@ -35,7 +36,8 @@ public class SettingsActivity extends PreferenceActivity {
      */
     private static final boolean ALWAYS_SIMPLE_PREFS = false;
 
-    public static final String PREF_COUNTRY = "country";
+    public static final String PREF_GENERAL_COUNTRY = "com.nulleye.udacity.spotifystreamer.PREF_GENERAL_COUNTRY";
+    public static final String PREF_GENERAL_PLAYER_NOTIFICATION = "com.nulleye.udacity.spotifystreamer.PREF_GENERAL_PLAYER_NOTIFICATION";
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
@@ -60,7 +62,7 @@ public class SettingsActivity extends PreferenceActivity {
         // Add 'general' preferences.
         addPreferencesFromResource(R.xml.pref_general);
 
-        ListPreference pref = (ListPreference) findPreference(PREF_COUNTRY);
+        ListPreference pref = (ListPreference) findPreference(PREF_GENERAL_COUNTRY);
         buildCountryPreference(pref);
         bindPreferenceSummaryToValue(pref);
     }
@@ -156,7 +158,7 @@ public class SettingsActivity extends PreferenceActivity {
         sBindPreferenceSummaryToValueListener.onPreferenceChange(preference,
                 PreferenceManager
                         .getDefaultSharedPreferences(preference.getContext())
-                        .getString(preference.getKey(), ""));
+                        .getString(preference.getKey(), Locale.getDefault().getCountry()));
 
     }
 
@@ -172,7 +174,7 @@ public class SettingsActivity extends PreferenceActivity {
 
             addPreferencesFromResource(R.xml.pref_general);
 
-            ListPreference pref = (ListPreference) findPreference(PREF_COUNTRY);
+            ListPreference pref = (ListPreference) findPreference(PREF_GENERAL_COUNTRY);
             buildCountryPreference(pref);
             bindPreferenceSummaryToValue(pref);
         }
@@ -186,14 +188,32 @@ public class SettingsActivity extends PreferenceActivity {
         Locale displayLocale = Locale.getDefault();
         Locale[] locales = Locale.getAvailableLocales();
         TreeMap<String,String> countries = new TreeMap<String, String>();
+        HashSet<String> dupes = new HashSet<String>();
         for(int i=0;i<locales.length;i++) {
             String country = locales[i].getCountry();
             if ((country != null) && !country.trim().isEmpty()) {
+                if (country.length() > 2) {
+                    country = locales[i].getVariant();
+                    if ((country == null) || country.trim().isEmpty() || (country.length() != 2)) continue; //Skip this
+                }
                 String display = locales[i].getDisplayCountry(displayLocale);
-                if (display == null) display = locales[i].getDisplayCountry();
-                if (display == null) display = locales[i].getCountry();
+                if ((display == null) || display.trim().isEmpty()) display = locales[i].getDisplayCountry();
+                if ((display == null) || display.trim().isEmpty()) display = country;
+                if ((display == null) || display.trim().isEmpty() || (display.length() == 1)) continue;    //Skip this
                 display = display.substring(0,1).toUpperCase() + display.substring(1);
-                if (!countries.containsKey(display)) countries.put(display, country);
+                final boolean addCountry = dupes.contains(display);
+                if (!addCountry && !countries.containsKey(display)) countries.put(display, country);
+                else {
+                    if (!addCountry) {
+                        //A previous display value exists, change to display + country code
+                        final String previousCountry = countries.get(display);
+                        if (previousCountry.equals(country)) continue;  //Skip real duplicate
+                        dupes.add(display);
+                        countries.remove(display);
+                        countries.put(display + " (" + previousCountry + ")", previousCountry);
+                    }
+                    countries.put(display + " (" + country + ")", country);
+                }
             }
         }
         countryPref.setEntryValues(countries.values().toArray(new String[countries.size()]));
