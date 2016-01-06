@@ -7,6 +7,8 @@ It consists of a **Spotify client** that searches for artists by name and lists 
 It also allows to play a **30 seconds preview** of each track using a nice player view. 
 The player also has a sticky notification that can be used to explore and play the artist tracks while using another application.
 
+It has been built from scratch and requires the course **Developing Andorid Apps: Fundamentals**.
+
 ## Improvements
 
 An immediate improvement to this project is to support Spotify account settings to allow complete song play and not only 30 seconds preview.
